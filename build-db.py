@@ -34,7 +34,7 @@ def create_db(folder,collection):
         embeddings = img_embeddings, # embeddings are used to search through the documents
                                           # we pass in the previously calculated embeddings
         documents=filenames, # we send in the titles as the documents
-        ids=[str(i) for i in range(len(filenames))], # must be unique for each doc
+        ids=filenames, # must be unique for each doc
     )
     print("Database updated successfully!")
 
@@ -42,37 +42,38 @@ def create_db(folder,collection):
 def update_db(folder, collection):
     current_files = [os.path.join(folder, image) for image in os.listdir(folder) if os.path.isfile(os.path.join(folder, image))]
 
-    existing_files = collection.documents
-
+    existing_files = collection.get()['documents']
     new_files = [file for file in current_files if file not in existing_files]
-
     deleted_files = [file for file in existing_files if file not in current_files]
-
-    for file in new_files:
-        img = Image.open(file)
-        img_embeddings = extract_features_clip(img).cpu().squeeze(0).numpy().tolist()
-        collection.add(
-            embeddings=[img_embeddings],
-            documents=[file],
-            ids=[str(existing_files.index(file))]
-        )
-
+    if len(new_files) == 0 and len(deleted_files) == 0:
+        print("Nothing to update!")
+        return
     for file in deleted_files:
         idx = existing_files.index(file)
-        collection.remove(ids=[str(idx)])
+        collection.delete(ids=[file])
+
+    for i,file in enumerate(new_files):
+        img = Image.open(file)
+        img_embeddings = extract_features_clip(img).cpu().squeeze(0).numpy().tolist()
+        collection.upsert(
+            embeddings=[img_embeddings],
+            documents=[file],
+            ids=[file]
+        )
+    
 
     print("Database updated successfully!")
 
 
-try:
+if len(client.list_collections())  != 0:
+    print("Database exists, Updating the database...")
     collection = client.get_collection('images')
     update_db('Image-Folder',collection)
-    print("Updated the database!")
-
-except:
+    print(len(collection.get()['documents']))
+else:
     collection =  client.create_collection(
         name="images",
         metadata={"hnsw:space": "cosine"}
     )
-    create_db('Image-Folder/',collection)
+    create_db('Image-Folder',collection)
     print("Created the database!")

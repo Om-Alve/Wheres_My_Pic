@@ -16,10 +16,9 @@ processor = CLIPProcessor.from_pretrained("./CLIP-VIT")
 print("Model loaded!")
 
 client = chromadb.PersistentClient('img_db/')
-collection = client.get_collection('images')
-
 
 def search(query):
+    collection = client.get_collection('images')
     with torch.no_grad():
         text_emb = model.get_text_features(**processor.tokenizer(query, return_tensors='pt').to('cuda'))
     results = collection.query(
@@ -32,7 +31,7 @@ interface = gr.Interface(
     fn=search,
     inputs=gr.Textbox(lines=1, placeholder="Enter your text query..."),
     outputs=gr.Image(type="pil"),
-    title="Local Image Search Engine",
+    title="Where's My Picture? : A Local Image Search Engine",
     description="Search for images in your local folder using text queries.",
 )
 
