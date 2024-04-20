@@ -8,7 +8,8 @@ import numpy as np
 import os
 
 print("Loading model...")
-model = CLIPModel.from_pretrained("./CLIP-VIT").to('cuda')
+device = 'cpu'
+model = CLIPModel.from_pretrained("./CLIP-VIT").to(torch.bfloat16).to(device)
 processor = CLIPProcessor.from_pretrained("./CLIP-VIT")
 print("Model loaded!")
 
@@ -17,7 +18,7 @@ client = chromadb.PersistentClient('img_db/')
 def search(query):
     collection = client.get_collection('images')
     with torch.no_grad():
-        text_emb = model.get_text_features(**processor.tokenizer(query, return_tensors='pt').to('cuda'))
+        text_emb = model.get_text_features(**processor.tokenizer(query, return_tensors='pt').to(device))
     results = collection.query(
         query_embeddings=text_emb.cpu().squeeze(0).tolist(),
         n_results=4  # top n results
