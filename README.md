@@ -12,7 +12,7 @@ Where's My Pic? is a local image search engine powered by CLIP (Contrastive Lang
 
 ![Demo 1](assets/Screenshot%202024-04-07%20130309.png)
 ![Demo 2](assets/Screenshot%202024-04-07%20130512.png)
-![Demo 3](assets/sScreenshot%202024-04-07%20130600.png)
+![Demo 3](assets/Screenshot%202024-04-07%20130600.png)
 
 
 ## Getting Started
