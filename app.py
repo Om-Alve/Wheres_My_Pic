@@ -70,14 +70,6 @@ def search(query):
     return gallery_images
 
 if __name__ == "__main__":
-    if len(client.list_collections()) == 0:
-        collection = client.create_collection(name="images", metadata={"hnsw:space": "cosine"})
-        create_db("img_folder/", collection)  # Change "img_folder/" to your folder containing images
-        print("Created the database!")
-    else:
-        collection = client.get_collection('images')
-        update_db(["img_folder/"], collection)  # Change "img_folder/" to your folder containing images
-
     demo = gr.Interface(
         fn=search,
         inputs=gr.Textbox(placeholder="Enter a query"),

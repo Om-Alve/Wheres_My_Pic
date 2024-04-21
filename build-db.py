@@ -85,7 +85,7 @@ if __name__ == "__main__":
                 create_db(folder, collection)
             print(f"Added Folders {args.add} successfully!")
             with open('img_db/indexed_folders.txt', 'w') as f:
-                f.write(f"{'\n'.join(args.add)}") 
+                f.write("\n".join(args.add))
         else:
             print("No folders to add!")
 
@@ -98,7 +98,9 @@ if __name__ == "__main__":
             create_db(folder, collection)
         print(f"Added Folders {args.add} successfully!")
         with open('img_db/indexed_folders.txt', 'a') as f:
-            f.write(f"\n{'\n'.join(args.add)}")
+            f.write("\n")
+            f.write("\n".join(args.add))
+
 
     elif args.update:
         collection = client.get_collection('images')
