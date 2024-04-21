@@ -58,7 +58,7 @@ Where's My Pic? is a local image search engine powered by CLIP (Contrastive Lang
 
 ## Usage
 
-1. Enter your search query in the text box (e.g., "a red flower").
+1. Enter your search query in the text box (e.g., "a meme about machine learning").
 2. The application will display the top results matching your query.
 3. You can click on the images to view them in more detail.
 
@@ -68,5 +68,5 @@ Contributions are welcome! If you find any issues or have suggestions for improv
 
 ## License
 
-This project is licensed under the [MIT License](LICENSE).
+This project is licensed under the [Apache License](LICENSE).
 
