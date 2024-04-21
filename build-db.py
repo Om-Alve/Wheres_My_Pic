@@ -1,26 +1,25 @@
-import chromadb
+import argparse
+import os
+import time
 import torch
-import torch.nn as nn
 from PIL import Image
 from transformers import CLIPProcessor, CLIPModel
 import numpy as np
-import os
-import time
-import argparse
+import chromadb
 
 print("Loading model...")
-device = 'cuda'
-model = CLIPModel.from_pretrained("./CLIP-VIT").to(torch.bfloat16).to(device)
-processor = CLIPProcessor.from_pretrained("./CLIP-VIT")
+device = 'cuda' if torch.cuda.is_available() else 'cpu'
+model = CLIPModel.from_pretrained("openai/clip-vit-base-patch32").to(torch.bfloat16).to(device)
+processor = CLIPProcessor.from_pretrained("openai/clip-vit-base-patch32")
 print("Model loaded!")
+
+client = chromadb.PersistentClient('img_db/')
 
 def extract_features_clip(image):
     with torch.no_grad():
         inputs = processor.image_processor(images=image, return_tensors="pt").to(device)
         image_features = model.get_image_features(**inputs)
         return image_features.to(torch.float16).cpu().squeeze(0).numpy().tolist()
-
-client = chromadb.PersistentClient('img_db/')
 
 def create_db(folder, collection):
     img_embeddings = []
@@ -76,20 +75,21 @@ if __name__ == "__main__":
     parser.add_argument('--add', nargs='+', help='Create a new database with the specified folders')    
     parser.add_argument('--update', action='store_true', help='Update the existing database')
     args = parser.parse_args()
+
     if len(client.list_collections()) == 0:
-        # if the database hasn't been created before
         collection = client.create_collection(
             name="images", metadata={"hnsw:space": "cosine"}
         )
-        for folder in args.add:
-            create_db(folder, collection)
-        print("Created the database!")
-        with open('img_db/indexed_folders.txt', 'w') as f:
-            f.write(f"{'\n'.join(args.add)}") 
-        print(f"Added Folders {args.add} successfully!")
-        print(f"Total documents indexed: {len(collection.get()['documents'])}")  
+        if args.add:
+            for folder in args.add:
+                create_db(folder, collection)
+            print(f"Added Folders {args.add} successfully!")
+            with open('img_db/indexed_folders.txt', 'w') as f:
+                f.write(f"{'\n'.join(args.add)}") 
+        else:
+            print("No folders to add!")
+
     elif args.add:
-        # if the db is already created and want to add new folders
         collection = client.get_collection('images')
         with open('img_db/indexed_folders.txt', 'r') as f:
             indexed_folders = f.read().split('\n')
@@ -97,14 +97,14 @@ if __name__ == "__main__":
         for folder in folders:
             create_db(folder, collection)
         print(f"Added Folders {args.add} successfully!")
-        print(f"Total documents indexed: {len(collection.get()['documents'])}")  
         with open('img_db/indexed_folders.txt', 'a') as f:
-            f.write(f"\n{'\n'.join(args.add)}")    
-    else:
-        # if the db is already created and want to update the existing folders
+            f.write(f"\n{'\n'.join(args.add)}")
+
+    elif args.update:
         collection = client.get_collection('images')
         with open('img_db/indexed_folders.txt', 'r') as f:
             indexed_folders = f.read().split('\n')
         update_db(indexed_folders, collection)
-        print(f"Total documents indexed: {len(collection.get()['documents'])}")  
 
+    else:
+        print("No action specified.")
