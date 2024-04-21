@@ -1,0 +1,7 @@
+chromadb
+torch
+torchvision
+pillow
+transformers
+numpy
+gradio
