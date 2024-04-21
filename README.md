@@ -36,24 +36,23 @@ Check out the demo video to see Where's My Pic? in action:
    pip install -r requirements.txt
    ```
 
-3. Download the CLIP model weights and place them in the `CLIP-VIT` directory.
 
-4. Index your image folders:
+3. Index your image folders:
 
    ```bash
-   python build_db.py --add /path/to/image/folder1 /path/to/image/folder2
+   python build-db.py --add /path/to/image/folder1 /path/to/image/folder2
    ```
 
    This will create a Chroma database in the `img_db` directory for the first time it's executed and index the specified folders. You can use it to add new folders.
 
-5. To add the changes to the indexed folders, for example adding or deleting a file use the following command
+4. To add the changes to the indexed folders, for example adding or deleting a file use the following command
 
    ```bash
-   python build_db.py --update
+   python build-db.py --update
    ```
    This will update the existing database with the changes in the indexed folders.
 
-6. Run the application:
+5. Run the application:
 
    ```bash
    python app.py
