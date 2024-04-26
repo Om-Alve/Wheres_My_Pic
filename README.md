@@ -2,6 +2,12 @@
 
 Where's My Pic? is a local image search engine powered by CLIP (Contrastive Language-Image Pre-training). It allows you to search for images in your local directories using natural language queries.
 
+You can give it a try on Lightning AI!
+
+<a target="_blank" href="https://lightning.ai/omalve/studios/local-image-search-engine">
+  <img src="https://pl-bolts-doc-images.s3.us-east-2.amazonaws.com/app-2/studio-badge.svg" alt="Open In Studio"/>
+</a>
+
 ## Features
 
 - Seamless integration with CLIP for powerful image-text retrieval.
