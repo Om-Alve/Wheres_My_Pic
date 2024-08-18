@@ -7,106 +7,134 @@ from transformers import CLIPProcessor, CLIPModel
 import numpy as np
 import chromadb
 
+torch.set_float32_matmul_precision("high")
+
 print("Loading model...")
-device = 'cuda' if torch.cuda.is_available() else 'cpu'
-model = CLIPModel.from_pretrained("openai/clip-vit-base-patch32").to(torch.bfloat16).to(device)
-processor = CLIPProcessor.from_pretrained("openai/clip-vit-base-patch32")
+device = "cpu" if torch.cuda.is_available() else "cpu"
+dtype = torch.float16 if device == "cuda" else torch.float32
+model = CLIPModel.from_pretrained("./CLIP-VIT", torch_dtype=dtype).to(device)
+processor = CLIPProcessor.from_pretrained("./CLIP-VIT")
 print("Model loaded!")
 
-client = chromadb.PersistentClient('img_db/')
+client = chromadb.PersistentClient("img_db/")
 
-def extract_features_clip(image):
+
+def print_gpu_usage():
+    if device == "cuda":
+        print(f"GPU memory allocated: {torch.cuda.memory_allocated() / 1e6:.2f} MB")
+    else:
+        print("GPU not available")
+
+
+def extract_features_clip(image_paths, batch_size=32):
     with torch.no_grad():
-        inputs = processor.image_processor(images=image, return_tensors="pt").to(device)
-        image_features = model.get_image_features(**inputs)
-        return image_features.to(torch.float16).cpu().squeeze(0).numpy().tolist()
+        all_features = []
+        for i in range(0, len(image_paths), batch_size):
+            batch_paths = image_paths[i : i + batch_size]
+            images = [Image.open(path).convert("RGB") for path in batch_paths]
+            inputs = processor(images=images, return_tensors="pt").to(device)
+            image_features = model.get_image_features(**inputs)
+            features = image_features.cpu().to(torch.float16).numpy()
+            all_features.extend(features)
+        return np.array(all_features).tolist()
 
-def create_db(folder, collection):
-    img_embeddings = []
-    filenames = []
-    start_time = time.time()
-    for image in os.listdir(folder):
-        filename = os.path.join(folder, image)
-        img = Image.open(filename)
-        img_embeddings.append(extract_features_clip(img))
-        filenames.append(filename)
-    collection.add(
-        embeddings=img_embeddings,
-        documents=filenames,
-        ids=filenames,
-    )
-    end_time = time.time()
-    print(f"Database updated for {folder} successfully!")
-    print(f"Time taken: {(end_time - start_time) * 1000} milliseconds")
 
-def update_db(folders, collection):
+def process_images(folders, collection, mode="add"):
     start_time = time.time()
-    current_files = []
+    print_gpu_usage()
+
+    all_files = []
     for folder in folders:
-        current_files.extend([os.path.join(folder, image) for image in os.listdir(folder) if os.path.isfile(os.path.join(folder, image))])
-
-    existing_files = collection.get()['documents']
-    new_files = [file for file in current_files if file not in existing_files]
-    deleted_files = [file for file in existing_files if file not in current_files]
-
-    if len(new_files) == 0 and len(deleted_files) == 0:
-        print(f"Nothing to update for {', '.join(folders)}!")
-        return
-
-    for file in deleted_files:
-        idx = existing_files.index(file)
-        collection.delete(ids=[file])
-
-    for i, file in enumerate(new_files):
-        img = Image.open(file)
-        img_embeddings = extract_features_clip(img)
-        collection.upsert(
-            embeddings=[img_embeddings],
-            documents=[file],
-            ids=[file]
+        all_files.extend(
+            [
+                os.path.join(folder, f)
+                for f in os.listdir(folder)
+                if os.path.isfile(os.path.join(folder, f))
+            ]
         )
 
+    batch_size = 128
+    for i in range(0, len(all_files), batch_size):
+        batch_files = all_files[i : i + batch_size]
+        batch_embeddings = extract_features_clip(batch_files)
+
+        if mode == "add":
+            collection.add(
+                embeddings=batch_embeddings,
+                documents=batch_files,
+                ids=batch_files,
+            )
+        elif mode == "update":
+            existing_files = set(collection.get(ids=batch_files)["documents"])
+            new_files = [file for file in batch_files if file not in existing_files]
+            deleted_files = [file for file in existing_files if file not in batch_files]
+
+            if deleted_files:
+                collection.delete(ids=deleted_files)
+
+            if new_files:
+                new_embeddings = [
+                    emb
+                    for file, emb in zip(batch_files, batch_embeddings)
+                    if file in new_files
+                ]
+                collection.upsert(
+                    embeddings=new_embeddings, documents=new_files, ids=new_files
+                )
+
     end_time = time.time()
-    print("Database updated successfully!")
-    print(f"Time taken: {(end_time - start_time) * 1000} milliseconds")
+    print_gpu_usage()
+    print(
+        f"Database {'updated' if mode == 'update' else 'created'} for {', '.join(folders)} successfully!"
+    )
+    print(f"Time taken: {(end_time - start_time):.2f} seconds")
+
+
+def ensure_file_exists(filepath):
+    if not os.path.isfile(filepath):
+        open(filepath, "a").close()
+
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description='Index image folders')
-    parser.add_argument('--add', nargs='+', help='Create a new database with the specified folders')    
-    parser.add_argument('--update', action='store_true', help='Update the existing database')
+    parser = argparse.ArgumentParser(description="Index image folders")
+    parser.add_argument(
+        "--add", nargs="+", help="Create a new database with the specified folders"
+    )
+    parser.add_argument(
+        "--update", action="store_true", help="Update the existing database"
+    )
     args = parser.parse_args()
 
-    if len(client.list_collections()) == 0:
+    ensure_file_exists("img_db/indexed_folders.txt")
+    collection_name = "images"
+
+    if not client.list_collections():
         collection = client.create_collection(
-            name="images", metadata={"hnsw:space": "cosine"}
+            name=collection_name, metadata={"hnsw:space": "cosine"}
         )
         if args.add:
-            for folder in args.add:
-                create_db(folder, collection)
-            print(f"Added Folders {args.add} successfully!")
-            with open('img_db/indexed_folders.txt', 'w') as f:
+            process_images(args.add, collection, mode="add")
+            with open("img_db/indexed_folders.txt", "w") as f:
                 f.write("\n".join(args.add))
         else:
             print("No folders to add!")
 
     elif args.add:
-        collection = client.get_collection('images')
-        with open('img_db/indexed_folders.txt', 'r') as f:
-            indexed_folders = f.read().split('\n')
-        folders = set(args.add).difference(set(indexed_folders))
-        for folder in folders:
-            create_db(folder, collection)
-        print(f"Added Folders {args.add} successfully!")
-        with open('img_db/indexed_folders.txt', 'a') as f:
-            f.write("\n")
-            f.write("\n".join(args.add))
-
+        collection = client.get_collection(collection_name)
+        with open("img_db/indexed_folders.txt", "r") as f:
+            indexed_folders = set(f.read().splitlines())
+        new_folders = set(args.add) - indexed_folders
+        if new_folders:
+            process_images(new_folders, collection, mode="add")
+            with open("img_db/indexed_folders.txt", "a") as f:
+                f.write("\n" + "\n".join(new_folders))
 
     elif args.update:
-        collection = client.get_collection('images')
-        with open('img_db/indexed_folders.txt', 'r') as f:
-            indexed_folders = f.read().split('\n')
-        update_db(indexed_folders, collection)
+        collection = client.get_collection(collection_name)
+        with open("img_db/indexed_folders.txt", "r") as f:
+            indexed_folders = f.read().splitlines()
+        if indexed_folders:
+            process_images(indexed_folders, collection, mode="update")
 
     else:
         print("No action specified.")
