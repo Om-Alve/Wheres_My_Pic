@@ -8,9 +8,9 @@ import os
 IMAGE_EXTENSIONS = [".jpg", ".jpeg", ".png", ".gif"]
 device = "cuda" if torch.cuda.is_available() else "cpu"
 
-print("Loading model...")
-model = CLIPModel.from_pretrained("./CLIP-VIT").to(device)
-processor = CLIPProcessor.from_pretrained("./CLIP-VIT")
+print(f"Loading model on {device}...")
+model = CLIPModel.from_pretrained("openai/clip-vit-base-patch32", torch_dtype=dtype).to(device)
+processor = CLIPProcessor.from_pretrained("openai/clip-vit-base-patch32")
 print("Model loaded!")
 
 client = chromadb.PersistentClient("img_db/")
